@@ -10,8 +10,19 @@ binary are both `windy`. References to "the crate" below always mean
 
 ## [Unreleased]
 
+## [2.1.0] — 2026-05-09
+
 ### Added
 
+- **`windy-lang` published to npm** as a wasm-pack `web` target.
+  The release workflow now builds `web/pkg` after `cargo publish`
+  and runs `npm publish --access public` against
+  `registry.npmjs.org`. Browser-side projects can depend on
+  `"windy-lang": "^2.1.0"` and `import init, { Session } from
+  'windy-lang'` without checking out this repo or running
+  `wasm-pack` locally. Version is single-sourced from
+  `Cargo.toml` — wasm-pack copies it into `web/pkg/package.json`,
+  and the workflow asserts the two match before publishing.
 - **Vim-style modal editor** in the playground. The source
   textarea now starts in **NORMAL** (a small badge above the
   editor labels the current mode); first-time visitors who only

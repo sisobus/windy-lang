@@ -76,6 +76,54 @@ jobs:
       - name: cargo publish
         run: cargo publish
 
+      # ---------- npm publish (wasm-pack web target) ----------
+      # The wasm bundle in web/pkg is what browser-side consumers
+      # (windy-aria etc.) install via `pnpm add windy-lang`. wasm-pack
+      # copies Cargo.toml's version into web/pkg/package.json, so the
+      # crate version IS the npm version — we assert that explicitly
+      # to catch wasm-pack regressions before they hit the registry.
+      - name: Install wasm-pack
+        uses: jetli/wasm-pack-action@v0.4.0
+        with:
+          version: 'latest'
+
+      - name: Setup Node (npm registry)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 'lts/*'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Build wasm pkg for npm
+        run: wasm-pack build --target web --release --out-dir web/pkg
+
+      - name: Assert wasm pkg version matches tag
+        run: |
+          PKG_VERSION=$(node -p "require('./web/pkg/package.json').version")
+          if [ "$PKG_VERSION" != "${{ steps.meta.outputs.version }}" ]; then
+            echo "::error::web/pkg/package.json version $PKG_VERSION != tag ${{ steps.meta.outputs.version }}"
+            exit 1
+          fi
+
+      - name: npm publish (skip if already published)
+        working-directory: web/pkg
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          # Re-running the workflow against an already-published version
+          # should not fail the job (matches the GitHub Release create-or-skip
+          # pattern below). npm exits with code 1 and a "cannot publish over
+          # the previously published versions" message — detect and treat
+          # as success.
+          if npm publish --access public 2>&1 | tee /tmp/publish.log; then
+            echo "published"
+          elif grep -q "cannot publish over the previously published" /tmp/publish.log; then
+            echo "already published, skipping"
+          else
+            cat /tmp/publish.log
+            exit 1
+          fi
+      # --------------------------------------------------------
+
       - name: Extract changelog entry
         id: changelog
         run: |
