@@ -84,7 +84,12 @@ jobs:
             --delete \
             --exclude "README.md" \
             --exclude ".*" \
-            --exclude "*.wasm"
+            --exclude "*.wasm" \
+            --exclude "aria/*"
+          # `aria/*` 는 windy-aria repo의 자체 deploy.yml이 관리한다
+          # (windy.sisobus.com/aria 로 배포되는 sonification 도구).
+          # 여기서 --delete 가 그 prefix를 건드리면 다음 windy-aria 배포
+          # 전까지 /aria 가 비어버린다.
 
       - name: Upload .wasm files with application/wasm Content-Type
         run: |
