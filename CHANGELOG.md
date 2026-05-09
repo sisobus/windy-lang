@@ -10,6 +10,32 @@ binary are both `windy`. References to "the crate" below always mean
 
 ## [Unreleased]
 
+## [2.2.0] — 2026-05-09
+
+### Added
+
+- **Optional `metrics` Cargo feature** that surfaces per-run execution
+  counters useful to downstream tooling. When the feature is on, the
+  `Vm` carries a `VmMetrics` snapshot that records:
+    - `max_alive_ips` — peak `vm.ips.len()` measured at the end of each
+      tick (after collision merge + halt-retain), so it's the
+      steady-state IP count rather than a mid-tick split spike;
+    - `spawned_ips` — total `t` (SPLIT) invocations across the run;
+    - `grid_writes` — total `p` (GRID_PUT) invocations;
+    - `branch_count` — total `_` + `|` + `~` invocations;
+    - `hard_opcode_bitmap` — a 16-bit bitmap of which "hard" opcodes
+      ran at least once (`t`, `p`, `g`, `_`, `|`, `≫`, `≪`, `~`, `#`,
+      `"`).
+  The `Grid` also gains `bounding_box`, `total_grid_cells`, and
+  `effective_cells` accessors under the same flag, where
+  *effective* means cells whose decoded opcode is neither `Op::Nop`
+  nor `Op::Unknown`. The flag is **off by default** — a default-features
+  build is byte-identical to v2.1.0, and no metric work is done. The
+  surface is shaped to plug directly into windy-coin's Phase 2
+  mining-policy guest, but anything that wants to know "how hard did
+  this windy program work" can read these numbers without
+  instrumenting the interpreter itself.
+
 ## [2.1.0] — 2026-05-09
 
 ### Added

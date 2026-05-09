@@ -1,6 +1,6 @@
 [package]
 name = "windy-lang"
-version = "2.1.0"
+version = "2.2.0"
 edition = "2021"
 rust-version = "1.75"
 description = "Windy — a 2D esoteric programming language where code flows like wind."
@@ -39,6 +39,14 @@ crate-type = ["cdylib", "rlib"]
 [[bin]]
 name = "windy"
 path = "src/main.rs"
+
+[features]
+# Off by default — adds zero overhead to the conforming interpreter.
+# Turn on for downstream tooling (e.g. windy-coin's mining-policy guest)
+# that needs runtime metrics about an executed program. See
+# `vm::VmMetrics` and `Grid::{total_grid_cells,effective_cells}` for
+# the surface this feature exposes.
+metrics = []
 
 [dependencies]
 num-bigint = "0.4"

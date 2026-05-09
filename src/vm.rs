@@ -125,6 +125,60 @@ pub struct Vm {
     pub trapped: bool,
     rng: ChaCha8Rng,
     warned: HashSet<u32>,
+    /// Optional execution counters used by downstream tooling (e.g.
+    /// windy-coin's mining-policy guest). Kept in lockstep with the
+    /// opcode dispatch so a feature consumer can read a snapshot at
+    /// any point without instrumenting the interpreter themselves.
+    /// Only present when the `metrics` feature is enabled — disabled
+    /// builds incur no cost.
+    #[cfg(feature = "metrics")]
+    pub metrics: VmMetrics,
+}
+
+/// Per-run execution metrics surfaced for downstream policy code.
+///
+/// Counts are *cumulative*, not per-tick: `spawned_ips` counts every
+/// `t` invocation across the run, not just the latest tick's. The
+/// bitmap follows the convention of bit `i` being set ↔ at least one
+/// invocation of the corresponding opcode happened. See the `BIT_*`
+/// associated constants for the bit assignment.
+///
+/// `max_alive_ips` tracks the peak measured at the *end* of each tick
+/// — i.e. after collision merges and post-halt retainment — so it's
+/// the steady-state count a policy contract would care about, not the
+/// transient mid-tick split count.
+#[cfg(feature = "metrics")]
+#[derive(Debug, Default, Clone, Copy)]
+pub struct VmMetrics {
+    /// Peak `vm.ips.len()` observed at the end of a tick over the run.
+    /// Initialised to `1` (the root IP) when the VM is constructed.
+    pub max_alive_ips: u64,
+    /// Total `t` (SPLIT) invocations across all IPs.
+    pub spawned_ips: u64,
+    /// Total `p` (GRID_PUT) invocations.
+    pub grid_writes: u64,
+    /// Total `_` + `|` + `~` invocations — anything that picks the
+    /// next direction dynamically.
+    pub branch_count: u64,
+    /// Bitmap of which "hard" opcodes were used at least once. The
+    /// hard pool matches the ten opcodes `random.ts` deliberately
+    /// excludes — see windy-coin's Phase 2 mining policy for the
+    /// rationale. Bits 10..15 are reserved.
+    pub hard_opcode_bitmap: u16,
+}
+
+#[cfg(feature = "metrics")]
+impl VmMetrics {
+    pub const BIT_T:           u16 = 1 << 0;  // SPLIT
+    pub const BIT_P:           u16 = 1 << 1;  // GRID_PUT
+    pub const BIT_G:           u16 = 1 << 2;  // GRID_GET
+    pub const BIT_IFH:         u16 = 1 << 3;  // _
+    pub const BIT_IFV:         u16 = 1 << 4;  // |
+    pub const BIT_GUST:        u16 = 1 << 5;  // ≫
+    pub const BIT_CALM:        u16 = 1 << 6;  // ≪
+    pub const BIT_TURBULENCE:  u16 = 1 << 7;  // ~
+    pub const BIT_TRAMPOLINE:  u16 = 1 << 8;  // #
+    pub const BIT_STRMODE:     u16 = 1 << 9;  // "
 }
 
 impl Vm {
@@ -143,6 +197,16 @@ impl Vm {
             trapped: false,
             rng,
             warned: HashSet::new(),
+            #[cfg(feature = "metrics")]
+            metrics: VmMetrics {
+                // Root IP is alive from construction, so the floor for
+                // peak concurrent-IPs is 1 — never 0.
+                max_alive_ips: 1,
+                spawned_ips: 0,
+                grid_writes: 0,
+                branch_count: 0,
+                hard_opcode_bitmap: 0,
+            },
         }
     }
 
@@ -213,6 +277,20 @@ impl Vm {
         self.ips.retain(|c| !c.halted);
         if self.ips.is_empty() {
             self.halted = true;
+        }
+
+        // Steady-state IP count for this tick — measured *after* the
+        // collision pass and the halted-IP retainment. Mid-tick peaks
+        // (e.g. right after a `t` SPLIT, before the next collision
+        // merges them) aren't visible here on purpose: the peak we
+        // care about is the one a downstream policy could see across
+        // tick boundaries.
+        #[cfg(feature = "metrics")]
+        {
+            let alive = self.ips.len() as u64;
+            if alive > self.metrics.max_alive_ips {
+                self.metrics.max_alive_ips = alive;
+            }
         }
     }
 
@@ -311,8 +389,17 @@ impl Vm {
         match op {
             Op::Nop => {}
             Op::Halt => self.ips[i].halted = true,
-            Op::Trampoline => self.ips[i].ip.advance(),
+            Op::Trampoline => {
+                #[cfg(feature = "metrics")]
+                { self.metrics.hard_opcode_bitmap |= VmMetrics::BIT_TRAMPOLINE; }
+                self.ips[i].ip.advance();
+            }
             Op::Split => {
+                #[cfg(feature = "metrics")]
+                {
+                    self.metrics.spawned_ips = self.metrics.spawned_ips.saturating_add(1);
+                    self.metrics.hard_opcode_bitmap |= VmMetrics::BIT_T;
+                }
                 let here = self.ips[i].ip;
                 // SPEC §3.5 / §3.7: child inherits parent's speed at
                 // split time.
@@ -340,11 +427,20 @@ impl Vm {
             Op::MoveS => self.set_dir(i, SOUTH),
             Op::MoveSe => self.set_dir(i, SE),
             Op::Turbulence => {
+                #[cfg(feature = "metrics")]
+                {
+                    self.metrics.branch_count = self.metrics.branch_count.saturating_add(1);
+                    self.metrics.hard_opcode_bitmap |= VmMetrics::BIT_TURBULENCE;
+                }
                 let d = *WINDS.choose(&mut self.rng).unwrap();
                 self.set_dir(i, d);
             }
             Op::PushDigit => self.push_at(i, BigInt::from(operand)),
-            Op::StrMode => self.ips[i].strmode = true,
+            Op::StrMode => {
+                #[cfg(feature = "metrics")]
+                { self.metrics.hard_opcode_bitmap |= VmMetrics::BIT_STRMODE; }
+                self.ips[i].strmode = true;
+            }
             Op::Add => {
                 let b = self.pop_at(i);
                 let a = self.pop_at(i);
@@ -396,10 +492,20 @@ impl Vm {
                 self.push_at(i, a);
             }
             Op::IfH => {
+                #[cfg(feature = "metrics")]
+                {
+                    self.metrics.branch_count = self.metrics.branch_count.saturating_add(1);
+                    self.metrics.hard_opcode_bitmap |= VmMetrics::BIT_IFH;
+                }
                 let a = self.pop_at(i);
                 self.set_dir(i, if a.is_zero() { EAST } else { WEST });
             }
             Op::IfV => {
+                #[cfg(feature = "metrics")]
+                {
+                    self.metrics.branch_count = self.metrics.branch_count.saturating_add(1);
+                    self.metrics.hard_opcode_bitmap |= VmMetrics::BIT_IFV;
+                }
                 let a = self.pop_at(i);
                 self.set_dir(i, if a.is_zero() { SOUTH } else { NORTH });
             }
@@ -427,6 +533,8 @@ impl Vm {
                 self.push_at(i, v);
             }
             Op::GridGet => {
+                #[cfg(feature = "metrics")]
+                { self.metrics.hard_opcode_bitmap |= VmMetrics::BIT_G; }
                 let y = self.pop_at(i);
                 let x = self.pop_at(i);
                 let (xi, yi) = match (x.to_i64(), y.to_i64()) {
@@ -440,6 +548,11 @@ impl Vm {
                 self.push_at(i, v);
             }
             Op::GridPut => {
+                #[cfg(feature = "metrics")]
+                {
+                    self.metrics.grid_writes = self.metrics.grid_writes.saturating_add(1);
+                    self.metrics.hard_opcode_bitmap |= VmMetrics::BIT_P;
+                }
                 let y = self.pop_at(i);
                 let x = self.pop_at(i);
                 let v = self.pop_at(i);
@@ -448,9 +561,13 @@ impl Vm {
                 }
             }
             Op::Gust => {
+                #[cfg(feature = "metrics")]
+                { self.metrics.hard_opcode_bitmap |= VmMetrics::BIT_GUST; }
                 self.ips[i].speed += BigInt::one();
             }
             Op::Calm => {
+                #[cfg(feature = "metrics")]
+                { self.metrics.hard_opcode_bitmap |= VmMetrics::BIT_CALM; }
                 if self.ips[i].speed <= BigInt::one() {
                     let (x, y) = (self.ips[i].ip.x, self.ips[i].ip.y);
                     let _ = writeln!(
@@ -1044,5 +1161,83 @@ mod tests {
             vec![BigInt::from(1), BigInt::from(2), BigInt::from(3)],
         );
         assert_eq!(vm.ips[0].speed, BigInt::from(2));
+    }
+}
+
+#[cfg(all(test, feature = "metrics"))]
+mod metrics_tests {
+    use super::*;
+
+    fn run_source_with_metrics(src: &str, max_steps: u64) -> (ExitCode, VmMetrics, String) {
+        let (grid, _scan_text) = parse(src);
+        let mut vm = Vm::new(grid, Some(0), Some(max_steps));
+        let mut stdin: &[u8] = b"";
+        let mut stdout: Vec<u8> = Vec::new();
+        let mut stderr: Vec<u8> = Vec::new();
+        let exit = vm.run(&mut stdin, &mut stdout, &mut stderr);
+        (exit, vm.metrics, String::from_utf8_lossy(&stdout).to_string())
+    }
+
+    #[test]
+    fn metrics_default_is_minimal_baseline() {
+        let m = VmMetrics::default();
+        assert_eq!(m.spawned_ips, 0);
+        assert_eq!(m.grid_writes, 0);
+        assert_eq!(m.branch_count, 0);
+        assert_eq!(m.hard_opcode_bitmap, 0);
+        // Vm::new() bumps max_alive_ips to 1, but the bare default is 0.
+        assert_eq!(m.max_alive_ips, 0);
+    }
+
+    #[test]
+    fn metrics_root_ip_visible_after_first_tick() {
+        // Trivial program: just `@`. Halt fires on tick 0; the
+        // post-tick max_alive_ips snapshot picks up the steady-state
+        // count of zero (the only IP halted), but the floor we set in
+        // Vm::new() keeps max_alive_ips at 1.
+        let (_, m, _) = run_source_with_metrics("@", 100);
+        assert_eq!(m.max_alive_ips, 1);
+        assert_eq!(m.spawned_ips, 0);
+    }
+
+    #[test]
+    fn metrics_strmode_bit_set_for_hello() {
+        // hello.wnd shape: opens string mode, pushes 13 chars, halts.
+        let (_, m, _) = run_source_with_metrics(
+            "\"!dlroW ,olleH\",,,,,,,,,,,,,@",
+            10_000,
+        );
+        assert_ne!(m.hard_opcode_bitmap & VmMetrics::BIT_STRMODE, 0);
+        assert_eq!(m.spawned_ips, 0);
+        assert_eq!(m.grid_writes, 0);
+        assert_eq!(m.branch_count, 0);
+    }
+
+    #[test]
+    fn metrics_split_increments_spawn_and_peak() {
+        // puzzle_hard.wnd: two SPLITs, peak 4 IPs, no other hard ops.
+        let (_, m, _) = run_source_with_metrics("→1.2.3t4.5t6.7←@", 100);
+        assert_eq!(m.spawned_ips, 3);  // t fires 3 times across the run
+        assert_eq!(m.max_alive_ips, 4);
+        assert_eq!(m.grid_writes, 0);
+        assert_eq!(m.branch_count, 0);
+        assert_eq!(m.hard_opcode_bitmap, VmMetrics::BIT_T);
+    }
+
+    #[test]
+    fn metrics_grid_writes_and_branches_track_independently() {
+        // Minimal program that fires `p` and `_` exactly once each
+        // before halting:
+        //   1 0 0 p   push v=1, x=0, y=0; pop them all in p; grid[0,0] := 1
+        //   0 _       push 0; IF_H pops 0 → keep heading east
+        //   @         halt
+        // The IP only walks east, so no cell is revisited and the
+        // counts are guaranteed to be 1.
+        let (exit, m, _) = run_source_with_metrics("100p0_@", 100);
+        assert_eq!(exit, ExitCode::Ok);
+        assert_eq!(m.grid_writes, 1);
+        assert_eq!(m.branch_count, 1);
+        assert_ne!(m.hard_opcode_bitmap & VmMetrics::BIT_P, 0);
+        assert_ne!(m.hard_opcode_bitmap & VmMetrics::BIT_IFH, 0);
     }
 }

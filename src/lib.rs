@@ -23,4 +23,7 @@ pub use opcodes::{decode_cell, Op};
 pub use parser::{normalize, parse};
 pub use vm::{run_source, ExitCode, RunOptions, Vm};
 
+#[cfg(feature = "metrics")]
+pub use vm::VmMetrics;
+
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
