@@ -133,6 +133,11 @@ pub struct Vm {
     /// builds incur no cost.
     #[cfg(feature = "metrics")]
     pub metrics: VmMetrics,
+    /// Working set behind `metrics.visited_cells`. Stays private so
+    /// downstream code can't depend on its representation; the
+    /// surface they read is `metrics.visited_cells` only.
+    #[cfg(feature = "metrics")]
+    visited: HashSet<(i64, i64)>,
 }
 
 /// Per-run execution metrics surfaced for downstream policy code.
@@ -147,6 +152,11 @@ pub struct Vm {
 /// — i.e. after collision merges and post-halt retainment — so it's
 /// the steady-state count a policy contract would care about, not the
 /// transient mid-tick split count.
+///
+/// `visited_cells` is the trace-based count of distinct grid positions
+/// any IP actually executed at — comments and signatures the IP never
+/// touches don't inflate it. This is the metric a "code length" gate
+/// should grade against, not a static parse-time bounding box.
 #[cfg(feature = "metrics")]
 #[derive(Debug, Default, Clone, Copy)]
 pub struct VmMetrics {
@@ -165,6 +175,14 @@ pub struct VmMetrics {
     /// excludes — see windy-coin's Phase 2 mining policy for the
     /// rationale. Bits 10..15 are reserved.
     pub hard_opcode_bitmap: u16,
+    /// Number of distinct `(x, y)` grid cells some IP actually visited
+    /// at least once over the run. Cells passed over by a high-speed
+    /// IP without execution (per SPEC §3.7) do *not* count, and cells
+    /// outside the IP path — including comments, sisobus signatures,
+    /// and other unreachable code — never count. This is the trace-
+    /// truth size of the program; the parsed bounding-box width and
+    /// height (see `Grid::bounding_box`) report the static layout.
+    pub visited_cells: u64,
 }
 
 #[cfg(feature = "metrics")]
@@ -206,7 +224,10 @@ impl Vm {
                 grid_writes: 0,
                 branch_count: 0,
                 hard_opcode_bitmap: 0,
+                visited_cells: 0,
             },
+            #[cfg(feature = "metrics")]
+            visited: HashSet::new(),
         }
     }
 
@@ -254,6 +275,15 @@ impl Vm {
             if self.ips[i].halted {
                 continue;
             }
+            #[cfg(feature = "metrics")]
+            {
+                // Trace-truth visit: any IP that *executes* on this
+                // cell counts (both opcode-decode mode and string mode
+                // qualify — both are "the IP touched the cell"). High-
+                // speed traversal (SPEC §3.7) skips intermediate cells
+                // and they correctly do NOT count here.
+                self.visited.insert((self.ips[i].ip.x, self.ips[i].ip.y));
+            }
             let cell = self.grid.get(self.ips[i].ip.x, self.ips[i].ip.y);
             if self.ips[i].strmode {
                 if cell.to_u32() == Some(STR_QUOTE) {
@@ -291,6 +321,7 @@ impl Vm {
             if alive > self.metrics.max_alive_ips {
                 self.metrics.max_alive_ips = alive;
             }
+            self.metrics.visited_cells = self.visited.len() as u64;
         }
     }
 
@@ -1185,8 +1216,28 @@ mod metrics_tests {
         assert_eq!(m.grid_writes, 0);
         assert_eq!(m.branch_count, 0);
         assert_eq!(m.hard_opcode_bitmap, 0);
+        assert_eq!(m.visited_cells, 0);
         // Vm::new() bumps max_alive_ips to 1, but the bare default is 0.
         assert_eq!(m.max_alive_ips, 0);
+    }
+
+    #[test]
+    fn metrics_visited_cells_counts_only_traced_path() {
+        // 4-cell linear program: `12@`. The IP at speed 1 visits
+        // (0,0), (1,0), (2,0) over three ticks, then halts on the @
+        // at (2,0). visited_cells should be exactly 3.
+        let (_, m, _) = run_source_with_metrics("12@", 100);
+        assert_eq!(m.visited_cells, 3);
+    }
+
+    #[test]
+    fn metrics_visited_cells_excludes_unreached_comments() {
+        // Multi-line program: code on row 0, "comment" on row 1.
+        // The IP only walks east on row 0 and never visits row 1.
+        let src = "12@\nthis_is_a_comment_with_punctuation_,.:";
+        let (_, m, _) = run_source_with_metrics(src, 100);
+        // Row 0: 3 visited (1, 2, @).
+        assert_eq!(m.visited_cells, 3);
     }
 
     #[test]

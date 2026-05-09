@@ -10,6 +10,29 @@ binary are both `windy`. References to "the crate" below always mean
 
 ## [Unreleased]
 
+## [2.2.1] — 2026-05-09
+
+### Added
+
+- **`VmMetrics::visited_cells`** under the `metrics` feature — count
+  of distinct `(x, y)` grid cells that any IP actually executed at
+  during the run. Cells that an IP only flew over (e.g. high-speed
+  traversal per SPEC §3.7) and cells in a sisobus signature or
+  comment block that the IP never reaches do *not* count. This is
+  the trace-truth size of the program; the parsed bounding box
+  (`Grid::bounding_box`) reports the static layout. The two together
+  give a downstream policy a clean way to ask "how much code did the
+  miner *actually run*", without being inflated by punctuation in
+  documentation rows.
+
+### Changed
+
+- `VmMetrics` now has six fields instead of five — anyone with an
+  exhaustive `match` over the struct has to add a `visited_cells:` arm.
+  This is technically a SemVer-flagged change for `metrics` consumers.
+  Default field-initialisation (`VmMetrics::default()` or `..base`)
+  continues to compile unchanged.
+
 ## [2.2.0] — 2026-05-09
 
 ### Added
