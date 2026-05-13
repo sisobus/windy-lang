@@ -10,17 +10,28 @@ binary are both `windy`. References to "the crate" below always mean
 
 ## [Unreleased]
 
+## [2.3.0] — 2026-05-13
+
 ### Added
 
-- **Git-style plugin dispatch in the `windy` CLI.** Any executable
-  named `windy-<name>` in `PATH` becomes a `windy <name>` subcommand —
-  the CLI captures unknown subcommands via clap's `external_subcommand`
-  and execs the plugin with the remaining arguments verbatim. Built so
-  that ecosystem tools (e.g. windy-coin's `windy-mine`) can graft onto
-  the `windy` CLI without windy-lang taking on their dependencies. If
-  the plugin isn't found, the CLI prints a 127 with a hint that names
-  `windy-mine` and the install command specifically when the user
-  typed `windy mine`.
+- **`windy mine` subcommand** — explicit, documented entry in `windy --help`
+  that forwards every argument to the `windy-mine` binary shipped by
+  [windy-coin](https://github.com/sisobus/windy-coin). Examples:
+  - `windy mine programs/foo.wnd` — full Risc Zero proof + Base mainnet mint
+  - `windy mine programs/foo.wnd --dry-run` — score-only, no proof, no tx
+  - `windy mine --help` — forwarded to `windy-mine --help` (own clap reference)
+
+  windy-lang itself takes no dependency on risc0 or alloy; the plugin
+  is exec'd from `PATH`. If `windy-mine` isn't installed, `windy mine`
+  exits 127 with the install command (`cargo install --git
+  https://github.com/sisobus/windy-coin windy-mine`).
+
+- **Git-style external plugin dispatch.** Beyond `mine`, any executable
+  named `windy-<name>` in `PATH` becomes a `windy <name>` subcommand
+  via clap's `external_subcommand`. Lets ecosystem tools graft onto
+  the `windy` CLI without windy-lang taking on their dependencies.
+  Future plugins (e.g. `windy-aria` for sonification) work the same
+  way without further changes to this crate.
 
 ## [2.2.1] — 2026-05-09
 

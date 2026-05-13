@@ -43,12 +43,35 @@ enum Command {
     /// Print the Windy version.
     Version,
 
+    /// Mine WNDY tokens via Risc Zero ZK proofs of a Windy program.
+    ///
+    /// Forwards every argument verbatim to the `windy-mine` binary
+    /// (shipped by `windy-coin`). Install with:
+    ///
+    ///     cargo install --git https://github.com/sisobus/windy-coin windy-mine
+    ///
+    /// Then either form works:
+    ///
+    ///     windy mine programs/foo.wnd              # full Risc Zero proof + mainnet mint
+    ///     windy mine programs/foo.wnd --dry-run    # score-only, no proof, no tx
+    ///
+    /// `--help` is forwarded too, so `windy mine --help` shows `windy-mine`'s
+    /// own option reference once installed.
+    ///
+    /// See windy-coin's `docs/MINING-GUIDE.md` for the full guide.
+    #[command(disable_help_flag = true, disable_version_flag = true)]
+    Mine {
+        /// All arguments forwarded to `windy-mine`.
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        args: Vec<String>,
+    },
+
     /// External subcommand — forwarded to `windy-<name>` if present in PATH.
     ///
     /// Lets ecosystem tools graft onto the `windy` CLI without windy-lang
-    /// depending on them. For example, `windy mine path/foo.wnd` looks up
-    /// `windy-mine` in PATH (shipped by `windy-coin`'s `cli/` crate) and
-    /// execs it with the remaining arguments.
+    /// depending on them. `mine` is the first such plugin (windy-coin's
+    /// `windy-mine`); any future `windy-<name>` binary in PATH becomes
+    /// `windy <name>` automatically.
     #[command(external_subcommand)]
     External(Vec<String>),
 }
@@ -95,31 +118,34 @@ fn main() -> ProcessExit {
             let code = debug_source(&source, &mut stdin);
             ProcessExit::from(code.clamp(0, 255) as u8)
         }
-        Command::External(args) => run_plugin(&args),
+        Command::Mine { args } => run_plugin("mine", &args),
+        Command::External(args) => {
+            let Some((subcmd, rest)) = args.split_first() else {
+                eprintln!("windy: no subcommand given");
+                return ProcessExit::from(2);
+            };
+            run_plugin(subcmd, rest)
+        }
     }
 }
 
-/// Git-style plugin dispatch: `windy <subcmd> [args...]` execs
-/// `windy-<subcmd>` from PATH, forwarding `[args...]` verbatim. The
-/// exit code of the plugin becomes our exit code. If the plugin
-/// isn't installed, we print a hint and exit 127 (POSIX
-/// "command not found").
-fn run_plugin(args: &[String]) -> ProcessExit {
-    let Some(subcmd) = args.first() else {
-        eprintln!("windy: no subcommand given");
-        return ProcessExit::from(2);
-    };
+/// Git-style plugin dispatch: forward `windy <subcmd> [args...]` to
+/// `windy-<subcmd> [args...]` in PATH. Exit code of the plugin becomes
+/// our exit code. If the plugin isn't installed, print a hint and exit
+/// 127 (POSIX "command not found"). `mine` gets a tailored hint pointing
+/// at windy-coin's install command since it's the first ecosystem plugin
+/// AND has an explicit subcommand entry — the unknown-plugin branch is
+/// reachable for `mine` if windy-mine isn't installed yet.
+fn run_plugin(subcmd: &str, args: &[String]) -> ProcessExit {
     let plugin = format!("windy-{subcmd}");
-    let rest = &args[1..];
 
-    match ProcessCommand::new(&plugin).args(rest).status() {
+    match ProcessCommand::new(&plugin).args(args).status() {
         Ok(status) => {
             let code = status.code().unwrap_or(1);
             ProcessExit::from(code.clamp(0, 255) as u8)
         }
         Err(e) if e.kind() == io::ErrorKind::NotFound => {
-            eprintln!("windy: '{subcmd}' is not a windy command.");
-            eprintln!("       (also tried '{plugin}' — not found in PATH)");
+            eprintln!("windy: '{subcmd}' requires the '{plugin}' plugin, but it isn't in PATH.");
             eprintln!();
             if subcmd == "mine" {
                 eprintln!("To mine WNDY, install windy-mine from windy-coin:");
