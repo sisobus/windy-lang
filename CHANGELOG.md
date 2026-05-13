@@ -10,6 +10,18 @@ binary are both `windy`. References to "the crate" below always mean
 
 ## [Unreleased]
 
+### Added
+
+- **Git-style plugin dispatch in the `windy` CLI.** Any executable
+  named `windy-<name>` in `PATH` becomes a `windy <name>` subcommand —
+  the CLI captures unknown subcommands via clap's `external_subcommand`
+  and execs the plugin with the remaining arguments verbatim. Built so
+  that ecosystem tools (e.g. windy-coin's `windy-mine`) can graft onto
+  the `windy` CLI without windy-lang taking on their dependencies. If
+  the plugin isn't found, the CLI prints a 127 with a hint that names
+  `windy-mine` and the install command specifically when the user
+  typed `windy mine`.
+
 ## [2.2.1] — 2026-05-09
 
 ### Added

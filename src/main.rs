@@ -8,7 +8,7 @@ use clap::{Parser, Subcommand};
 use std::fs;
 use std::io;
 use std::path::PathBuf;
-use std::process::ExitCode as ProcessExit;
+use std::process::{Command as ProcessCommand, ExitCode as ProcessExit};
 use windy::{debug_source, run_source, RunOptions, VERSION};
 
 #[derive(Parser)]
@@ -42,6 +42,15 @@ enum Command {
     },
     /// Print the Windy version.
     Version,
+
+    /// External subcommand — forwarded to `windy-<name>` if present in PATH.
+    ///
+    /// Lets ecosystem tools graft onto the `windy` CLI without windy-lang
+    /// depending on them. For example, `windy mine path/foo.wnd` looks up
+    /// `windy-mine` in PATH (shipped by `windy-coin`'s `cli/` crate) and
+    /// execs it with the remaining arguments.
+    #[command(external_subcommand)]
+    External(Vec<String>),
 }
 
 fn main() -> ProcessExit {
@@ -85,6 +94,49 @@ fn main() -> ProcessExit {
             let mut stdin = io::stdin().lock();
             let code = debug_source(&source, &mut stdin);
             ProcessExit::from(code.clamp(0, 255) as u8)
+        }
+        Command::External(args) => run_plugin(&args),
+    }
+}
+
+/// Git-style plugin dispatch: `windy <subcmd> [args...]` execs
+/// `windy-<subcmd>` from PATH, forwarding `[args...]` verbatim. The
+/// exit code of the plugin becomes our exit code. If the plugin
+/// isn't installed, we print a hint and exit 127 (POSIX
+/// "command not found").
+fn run_plugin(args: &[String]) -> ProcessExit {
+    let Some(subcmd) = args.first() else {
+        eprintln!("windy: no subcommand given");
+        return ProcessExit::from(2);
+    };
+    let plugin = format!("windy-{subcmd}");
+    let rest = &args[1..];
+
+    match ProcessCommand::new(&plugin).args(rest).status() {
+        Ok(status) => {
+            let code = status.code().unwrap_or(1);
+            ProcessExit::from(code.clamp(0, 255) as u8)
+        }
+        Err(e) if e.kind() == io::ErrorKind::NotFound => {
+            eprintln!("windy: '{subcmd}' is not a windy command.");
+            eprintln!("       (also tried '{plugin}' — not found in PATH)");
+            eprintln!();
+            if subcmd == "mine" {
+                eprintln!("To mine WNDY, install windy-mine from windy-coin:");
+                eprintln!(
+                    "  cargo install --git https://github.com/sisobus/windy-coin windy-mine"
+                );
+            } else {
+                eprintln!(
+                    "windy supports git-style plugins: any executable named \
+                     `windy-<name>` in PATH becomes a `windy <name>` subcommand."
+                );
+            }
+            ProcessExit::from(127)
+        }
+        Err(e) => {
+            eprintln!("windy: cannot exec '{plugin}': {e}");
+            ProcessExit::from(127)
         }
     }
 }
