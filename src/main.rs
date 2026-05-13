@@ -48,7 +48,7 @@ enum Command {
     /// Forwards every argument verbatim to the `windy-mine` binary
     /// (shipped by `windy-coin`). Install with:
     ///
-    ///     cargo install --git https://github.com/sisobus/windy-coin windy-mine
+    ///     cargo install windy-mine
     ///
     /// Then either form works:
     ///
@@ -62,6 +62,28 @@ enum Command {
     #[command(disable_help_flag = true, disable_version_flag = true)]
     Mine {
         /// All arguments forwarded to `windy-mine`.
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        args: Vec<String>,
+    },
+
+    /// Render a Windy program to a WAV file via opcode→sound mapping (sonification).
+    ///
+    /// Forwards every argument verbatim to the `windy-aria` binary
+    /// (shipped by `windy-aria`). Install with:
+    ///
+    ///     cargo install windy-aria
+    ///
+    /// Examples:
+    ///
+    ///     windy aria programs/foo.wnd               # writes programs/foo.wav
+    ///     windy aria programs/foo.wnd -o my.wav     # custom output path
+    ///     windy aria programs/foo.wnd --bpm 120     # tempo
+    ///
+    /// `--help` is forwarded too, so `windy aria --help` shows `windy-aria`'s
+    /// own option reference once installed.
+    #[command(disable_help_flag = true, disable_version_flag = true)]
+    Aria {
+        /// All arguments forwarded to `windy-aria`.
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
         args: Vec<String>,
     },
@@ -119,6 +141,7 @@ fn main() -> ProcessExit {
             ProcessExit::from(code.clamp(0, 255) as u8)
         }
         Command::Mine { args } => run_plugin("mine", &args),
+        Command::Aria { args } => run_plugin("aria", &args),
         Command::External(args) => {
             let Some((subcmd, rest)) = args.split_first() else {
                 eprintln!("windy: no subcommand given");
@@ -150,6 +173,9 @@ fn run_plugin(subcmd: &str, args: &[String]) -> ProcessExit {
             if subcmd == "mine" {
                 eprintln!("To mine WNDY, install windy-mine from crates.io:");
                 eprintln!("  cargo install windy-mine");
+            } else if subcmd == "aria" {
+                eprintln!("To render Windy programs to audio, install windy-aria from crates.io:");
+                eprintln!("  cargo install windy-aria");
             } else {
                 eprintln!(
                     "windy supports git-style plugins: any executable named \

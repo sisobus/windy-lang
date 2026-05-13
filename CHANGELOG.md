@@ -10,6 +10,25 @@ binary are both `windy`. References to "the crate" below always mean
 
 ## [Unreleased]
 
+## [2.4.0] — 2026-05-13
+
+### Added
+
+- **`windy aria` subcommand** — sister of `windy mine`, listed in
+  `windy --help`. Forwards every argument verbatim to the
+  [`windy-aria`](https://crates.io/crates/windy-aria) binary which
+  renders a `.wnd` source to a `.wav` audio file via opcode→sound
+  mapping. Examples:
+  - `windy aria programs/foo.wnd` — writes `programs/foo.wav`
+  - `windy aria programs/foo.wnd -o my.wav --bpm 120`
+  - `windy aria --help` — forwarded to `windy-aria --help`
+
+  If `windy-aria` isn't installed, exits 127 with
+  `cargo install windy-aria`. Generic plugin lookup
+  (`#[command(external_subcommand)]`) still catches any other
+  `windy-<name>` binary in `PATH` for zero-config ecosystem
+  extension.
+
 ## [2.3.2] — 2026-05-13
 
 ### Changed
