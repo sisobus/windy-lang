@@ -453,4 +453,4 @@ crate at the repo root powers everything afterwards.
 Initial scaffold. Python interpreter, rich-based debugger, WASI
 output-baking stopgap. Retired by v0.2.
 
-[1.0.0]: https://github.com/sisobus/windy/releases/tag/v1.0.0
+[1.0.0]: https://github.com/sisobus/windy-lang/releases/tag/v1.0.0

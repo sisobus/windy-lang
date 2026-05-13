@@ -38,7 +38,7 @@
 |year=[[:Category:2026|2026]]
 |memsys=infinite bi-directional sparse 2D grid + per-IP unbounded stack
 |class=[[:Category:Turing complete|Turing complete]]
-|refimpl=[https://github.com/sisobus/windy windy-lang]
+|refimpl=[https://github.com/sisobus/windy-lang windy-lang]
 |files=<code>.wnd</code>
 }}
 
@@ -277,7 +277,7 @@ The IP rides a clockwise rotation at speed 2, printing one character per non-cor
 
 == Reference implementation ==
 
-A single Rust crate, hosted on GitHub at [https://github.com/sisobus/windy github.com/sisobus/windy] and published on crates.io as [https://crates.io/crates/windy-lang windy-lang]. It compiles to three targets:
+A single Rust crate, hosted on GitHub at [https://github.com/sisobus/windy-lang github.com/sisobus/windy-lang] and published on crates.io as [https://crates.io/crates/windy-lang windy-lang]. It compiles to three targets:
 
 * '''Native''' — <code>cargo install windy-lang</code> installs a CLI <code>windy</code> with subcommands <code>run</code>, <code>debug</code>, <code>version</code>. The debugger steps tick by tick with full IP / stack / grid inspection.
 * '''<code>wasm32-wasip1</code>''' — a portable <code>windy.wasm</code> runnable under any [[wikipedia:WebAssembly_System_Interface|WASI]] host (<code>wasmtime</code>, <code>wasmer</code>, etc.).
@@ -289,12 +289,12 @@ The interpreter prints a banner to stderr if the source contains the literal sub
 
 == External resources ==
 
-* [https://github.com/sisobus/windy GitHub repository] — Rust source, examples, conformance harnesses, CI workflows
+* [https://github.com/sisobus/windy-lang GitHub repository] — Rust source, examples, conformance harnesses, CI workflows
 * [https://crates.io/crates/windy-lang crates.io: windy-lang] — published reference implementation
 * [https://windy.sisobus.com Browser playground] — write, run, and step-debug Windy programs in the browser; modal Vim-style editor with a click-to-insert glyph palette
-* [https://github.com/sisobus/windy/blob/main/SPEC.md Language specification (SPEC.md)] — single source of truth for opcode semantics, IP scheduling, and collision-merge rules
-* [https://github.com/sisobus/windy/blob/main/CHANGELOG.md Changelog] — version history (Keep-a-Changelog format)
-* [https://github.com/sisobus/windy/tree/main/examples Examples directory] — annotated <code>.wnd</code> programs from "Hello, World!" to four-IP asymmetric collision puzzles
+* [https://github.com/sisobus/windy-lang/blob/main/SPEC.md Language specification (SPEC.md)] — single source of truth for opcode semantics, IP scheduling, and collision-merge rules
+* [https://github.com/sisobus/windy-lang/blob/main/CHANGELOG.md Changelog] — version history (Keep-a-Changelog format)
+* [https://github.com/sisobus/windy-lang/tree/main/examples Examples directory] — annotated <code>.wnd</code> programs from "Hello, World!" to four-IP asymmetric collision puzzles
 
 [[Category:2026]]
 [[Category:Languages]]

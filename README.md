@@ -2,7 +2,7 @@
 
 > A 2D esoteric programming language where code flows like wind.
 
-[![Deploy to S3](https://github.com/sisobus/windy/actions/workflows/deploy.yml/badge.svg)](https://github.com/sisobus/windy/actions/workflows/deploy.yml)
+[![Deploy to S3](https://github.com/sisobus/windy-lang/actions/workflows/deploy.yml/badge.svg)](https://github.com/sisobus/windy-lang/actions/workflows/deploy.yml)
 [![crates.io](https://img.shields.io/crates/v/windy-lang.svg)](https://crates.io/crates/windy-lang)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
@@ -141,7 +141,7 @@ Requires a stable Rust toolchain (1.75+). Install via
 ```bash
 cargo install windy-lang
 # or, from the git tip:
-cargo install --git https://github.com/sisobus/windy
+cargo install --git https://github.com/sisobus/windy-lang
 ```
 
 The crates.io package is `windy-lang`; the installed binary is
@@ -150,7 +150,7 @@ The crates.io package is `windy-lang`; the installed binary is
 Or build from a clone:
 
 ```bash
-git clone https://github.com/sisobus/windy.git
+git clone https://github.com/sisobus/windy-lang.git
 cd windy
 cargo build --release
 ./target/release/windy run examples/hello.wnd

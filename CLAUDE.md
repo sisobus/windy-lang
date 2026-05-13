@@ -181,7 +181,7 @@ cargo test --test conformance          # conformance만
 
 ## 배포 / 인프라
 
-- **Repo**: `sisobus/windy` (현재 private, v1.0 publish와 함께 public 전환 예정)
+- **Repo**: `sisobus/windy-lang` (현재 private, v1.0 publish와 함께 public 전환 예정)
 - **crates.io 패키지**: `windy-lang` (베어 `windy`는 선점되어 있음). 라이브러리/바이너리 이름은 그대로 `windy`. 새 버전 publish 절차:
   1. `Cargo.toml` `[package] version` bump.
   2. `CHANGELOG.md`에 새 섹션 추가 (Keep a Changelog 형식 — Added /
