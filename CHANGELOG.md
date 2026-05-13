@@ -10,6 +10,17 @@ binary are both `windy`. References to "the crate" below always mean
 
 ## [Unreleased]
 
+## [2.3.2] — 2026-05-13
+
+### Changed
+
+- `Cargo.toml` `repository` and `documentation` URLs updated to
+  `https://github.com/sisobus/windy-lang` (the GitHub repo was renamed
+  from `windy` to `windy-lang` to match the crate name). GitHub's
+  permanent redirect keeps the old URLs working, but this republish
+  makes the canonical link on crates.io point at the new URL
+  directly. No code changes; this is a metadata-only patch.
+
 ## [2.3.1] — 2026-05-13
 
 ### Fixed
