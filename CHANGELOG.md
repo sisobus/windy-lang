@@ -10,6 +10,15 @@ binary are both `windy`. References to "the crate" below always mean
 
 ## [Unreleased]
 
+## [2.3.1] — 2026-05-13
+
+### Fixed
+
+- The "windy-mine plugin not in PATH" hint pointed at the pre-publish
+  install command (`cargo install --git https://github.com/sisobus/windy-coin
+  windy-mine`). Now that `windy-mine` is on crates.io, the hint reads
+  `cargo install windy-mine`.
+
 ## [2.3.0] — 2026-05-13
 
 ### Added

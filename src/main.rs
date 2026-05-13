@@ -148,10 +148,8 @@ fn run_plugin(subcmd: &str, args: &[String]) -> ProcessExit {
             eprintln!("windy: '{subcmd}' requires the '{plugin}' plugin, but it isn't in PATH.");
             eprintln!();
             if subcmd == "mine" {
-                eprintln!("To mine WNDY, install windy-mine from windy-coin:");
-                eprintln!(
-                    "  cargo install --git https://github.com/sisobus/windy-coin windy-mine"
-                );
+                eprintln!("To mine WNDY, install windy-mine from crates.io:");
+                eprintln!("  cargo install windy-mine");
             } else {
                 eprintln!(
                     "windy supports git-style plugins: any executable named \
